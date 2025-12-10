@@ -95,7 +95,6 @@ Navigate to **Admin → Connections** in the Airflow UI and create:
 .
 ├── dags/
 │   └── etl_weather_pipeline.py    # Main ETL DAG definition
-├── docker-compose.yml              # PostgreSQL container configuration
 └── README.md                       # Project documentation
 ```
 
