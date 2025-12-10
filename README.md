@@ -1,141 +1,177 @@
-ETL Weather Pipeline using Apache Airflow & Dockerized Postgres
+# Weather ETL Pipeline with Apache Airflow
 
-This project is a simple ETL (Extract–Transform–Load) pipeline built using Apache Airflow, HTTP Hook, and Postgres Hook.
-The pipeline fetches real-time weather data from the Open-Meteo API and stores it in a Postgres database running inside Docker.
+A production-ready ETL (Extract, Transform, Load) pipeline built with Apache Airflow that fetches real-time weather data from the OpenMeteo API and stores it in a PostgreSQL database.
 
-🚀 Architecture Overview
-Airflow DAG Scheduler
-|
+## Overview
 
----
+This project demonstrates a complete ETL workflow that:
+- **Extracts** current weather data (temperature and wind speed) from the OpenMeteo API for London
+- **Transforms** the raw API response into a structured format
+- **Loads** the processed data into a PostgreSQL database
 
-| | |
-Extract Transform Load
-(HTTP API) (JSON) (Postgres Hook)
-| |
--------------> Docker Postgres
+The pipeline runs daily and is orchestrated using Apache Airflow with the TaskFlow API.
 
-📡 Extract – HTTP Hook
 
-Airflow connects to Open-Meteo API using a configured HTTP connection:
+## Features
 
-Host stored in Airflow Conn: https://api.open-meteo.com
+- **Automated daily weather data collection**
+- **Modular design** using Airflow's TaskFlow API decorators
+- **Error handling** for API failures
+- **Docker-based** PostgreSQL database
+- **Connection management** via Airflow connections
+- **Idempotent operations** with table creation checks
 
-Endpoint handled in code:
+## Prerequisites
 
-/v1/forecast?latitude=...&longitude=...&current_weather=true
+- Python 3.8+
+- Apache Airflow 2.0+
+- Docker & Docker Compose
+- Astronomer CLI (optional, for local development)
 
-🔄 Transform
+## Installation & Setup
 
-We extract only:
+### 1. Clone the Repository
 
-Temperature
+```bash
+git clone <your-repo-url>
+cd weather-etl-pipeline
+```
 
-Wind speed
+### 2. Start PostgreSQL Database
 
-And convert them into a simple Python dictionary.
-
-🗄️ Load – Postgres Hook
-
-Postgres is running inside Docker.
-Airflow connects using:
-
-Host: postgres
-User: postgres
-Password: postgres
-DB: postgres
-Port: 5432
-
-The DAG:
-
-Creates the table if it doesn’t exist
-
-Inserts the latest weather data
-
-🐳 Docker Setup (Postgres Database)
-version: "3"
-services:
-postgres:
-image: postgres:13
-container_name: postgres_db
-environment:
-POSTGRES_USER: postgres
-POSTGRES_PASSWORD: postgres
-POSTGRES_DB: postgres
-ports: - "5432:5432"
-volumes: - postgres_data:/var/lib/postgresql/data
-
-volumes:
-postgres_data:
-
-Start Postgres:
-
+```bash
 docker-compose up -d
+```
 
-🪝 Airflow DAG Code
+This will start a PostgreSQL container with:
+- **Host:** localhost
+- **Port:** 5432
+- **Database:** postgres
+- **User:** postgres
+- **Password:** postgres
 
-Your full DAG code is inside:
+### 3. Install Airflow Dependencies
 
-dags/etl_weather_pipeline.py
-
-⚙️ Airflow Connections Required
-
-1. HTTP Connection
-   Conn ID: open_meteo_api
-   Conn Type: HTTP
-   Host: https://api.open-meteo.com
-
-2. Postgres Connection
-   Conn ID: postgres_default
-   Conn Type: Postgres
-   Host: postgres
-   User: postgres
-   Password: postgres
-   Port: 5432
-   Schema: postgres
-
-▶️ Running the ETL Pipeline (Astro CLI)
-
-Initialize:
-
-astro dev init
-
-Start Airflow:
-
+If using Astronomer:
+```bash
 astro dev start
+```
 
-Restart if needed:
+Or install manually:
+```bash
+pip install apache-airflow
+pip install apache-airflow-providers-http
+pip install apache-airflow-providers-postgres
+```
 
-astro dev restart
+### 4. Configure Airflow Connections
 
-Open Airflow UI:
+#### PostgreSQL Connection
+Navigate to **Admin → Connections** in the Airflow UI and create:
 
-http://localhost:8080
+- **Connection ID:** `postgres_default`
+- **Connection Type:** Postgres
+- **Host:** `postgres` (or `localhost` if running Airflow outside Docker)
+- **Schema:** `postgres`
+- **Login:** `postgres`
+- **Password:** `postgres`
+- **Port:** `5432`
 
-Trigger the DAG manually or wait for schedule.
+#### OpenMeteo API Connection
+- **Connection ID:** `open_meteo_api`
+- **Connection Type:** HTTP
+- **Host:** `https://api.open-meteo.com`
 
-📊 Check Stored Data
+### 5. Enable and Trigger the DAG
 
-Use:
+1. Open the Airflow UI (typically at `http://localhost:8080`)
+2. Find the `etl_weather_pipeline` DAG
+3. Toggle it to "On"
+4. Click "Trigger DAG" to run manually or wait for the daily schedule
 
-docker exec -it postgres_db psql -U postgres -d postgres
-SELECT \* FROM weather_data;
+## 📂 Project Structure
 
-📦 Requirements
+```
+.
+├── dags/
+│   └── etl_weather_pipeline.py    # Main ETL DAG definition
+├── docker-compose.yml              # PostgreSQL container configuration
+└── README.md                       # Project documentation
+```
 
-requirements.txt:
+## 🔧 Configuration
 
-apache-airflow-providers-http
-apache-airflow-providers-postgres
+### Location Settings
+To change the weather data location, modify these constants in `etl_weather_pipeline.py`:
 
-🎯 Future Improvements
+```python
+LATITUDE = '51.5074'   # London latitude
+LONGITUDE = '-0.1278'  # London longitude
+```
 
-Add timestamps
+### Schedule
+The DAG runs daily by default. Modify the schedule in the DAG definition:
 
-Add error handling & retries
+```python
+schedule = '@daily'  # Can be changed to '@hourly', '0 0 * * *', etc.
+```
 
-Store historical data
+## Database Schema
 
-Use Airflow Variables for config
+The pipeline creates a `weather_data` table with the following structure:
 
-Add Grafana dashboard
+| Column      | Type  | Description              |
+|-------------|-------|--------------------------|
+| temperature | FLOAT | Temperature in Celsius   |
+| windspeed   | FLOAT | Wind speed in km/h       |
+
+##  DAG Tasks
+
+1. **extract_weather_data**: Fetches current weather data from OpenMeteo API
+2. **transform_weather_data**: Extracts temperature and wind speed from the response
+3. **load_into_database**: Inserts transformed data into PostgreSQL
+
+## Troubleshooting
+
+### Connection Errors
+- Verify PostgreSQL is running: `docker ps`
+- Check Airflow connections are configured correctly
+- Ensure network connectivity between Airflow and PostgreSQL
+
+### API Failures
+- Check internet connectivity
+- Verify the OpenMeteo API is accessible: `curl https://api.open-meteo.com/v1/forecast?latitude=51.5074&longitude=-0.1278&current_weather=true`
+
+### Database Issues
+- Check PostgreSQL logs: `docker logs postgres_db`
+- Verify credentials in Airflow connection
+- Ensure the database accepts connections from Airflow
+
+## Future Enhancements
+
+- [ ] Add data validation and quality checks
+- [ ] Implement historical data backfilling
+- [ ] Add timestamps to weather records
+- [ ] Include additional weather parameters (humidity, pressure, etc.)
+- [ ] Create data visualization dashboard
+- [ ] Add alerting for extreme weather conditions
+- [ ] Implement data retention policies
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is open source and available under the MIT License.
+
+## 👤 Author
+
+**Owner:** Bishanka
+
+##  Resources
+
+- [Apache Airflow Documentation](https://airflow.apache.org/docs/)
+- [OpenMeteo API Documentation](https://open-meteo.com/en/docs)
+- [Astronomer Documentation](https://docs.astronomer.io/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
